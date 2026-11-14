@@ -45,7 +45,6 @@ OS change: hosts track a tag with `bootc upgrade`; nothing is yum-installed on h
 
 ## Known constraints / landmines
 
-- GHCR packages are created **private** on first push — flip to public or installs 401. *(TODO: delete this bullet and the README warning once the packages are public and CI is green.)*
 - STIG/CIS: official SSG content covers RHEL/CS (profiles identical cs9↔rhel9); Fedora has no STIG
   and only DRAFT CIS. Hardened variants stay on the EL side. `oscap-im` (openscap-utils) is the
   build-time remediation tool; it needs the *image's* repos reachable during build.

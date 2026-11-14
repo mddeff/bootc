@@ -16,9 +16,6 @@ Naming scheme (as flavors land): `<distro>-<flavor>[-gpu][-cis|stig]`, content d
 the **name**, only version/channel in the **tag** — a tag must always point at "the same thing, newer."
 Hosts follow `:latest`; promoting a build = re-pointing `:latest` at a tested date tag.
 
-> **GHCR gotcha:** the first CI push creates the packages **private**. Flip each package to public
-> (repo → Packages → settings) or anonymous installs will 401. For private use instead, see the
-> `auth.json` block in the kickstarts.
 
 ## No PXE? Boot ISOs
 
