@@ -83,7 +83,7 @@ jobs:
 
       - name: Inject inst.ks kernel arg (mkksiso)
         run: |
-          docker run --rm -v "$PWD:/work" -w /work registry.fedoraproject.org/fedora:44 \
+          docker run --rm --privileged -v "$PWD:/work" -w /work registry.fedoraproject.org/fedora:44 \
             bash -ceu 'dnf -y -q install lorax xorriso >/dev/null 2>&1; \
               mkksiso -c "inst.ks=https://raw.githubusercontent.com/${{ github.repository }}/main/kickstarts/${{ matrix.name }}.ks" \
                 boot.iso ${{ matrix.name }}-boot.iso'
