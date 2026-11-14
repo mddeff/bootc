@@ -1,0 +1,22 @@
+# c9s-base: CentOS Stream 9 bootc base image
+FROM quay.io/centos-bootc/centos-bootc:stream9
+
+ARG IMAGE_NAME=c9s-base
+ARG BUILD_ID=dev
+
+LABEL org.opencontainers.image.title="${IMAGE_NAME}" \
+      org.opencontainers.image.source="https://github.com/mddeff/bootc" \
+      net.zeroent.os.distro="c9s" \
+      net.zeroent.os.flavor="base"
+
+# Machine-readable identity, queryable from a booted host without parsing image refs
+RUN mkdir -p /usr/share/mddeff && printf '{"name":"%s","distro":"c9s","flavor":"base","build":"%s"}\n' \
+      "${IMAGE_NAME}" "${BUILD_ID}" > /usr/share/mddeff/image-info.json
+
+# cloud-init baked into base: inert on PXE/metal installs (no datasource; kickstarts also
+# write /etc/cloud/cloud-init.disabled), live when this image is emitted as qcow2 via
+# bootc-image-builder for VM/cloud guests.
+RUN dnf -y install cloud-init && dnf clean all
+
+# Fail the build on common bootc layering mistakes (content in /var, dangling systemd units, etc.)
+RUN bootc container lint

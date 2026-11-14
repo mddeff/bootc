@@ -1,0 +1,6 @@
+#!ipxe
+# BIOS path: iPXE NIC ROMs fetch this over HTTP (see dnsmasq.conf), no TFTP/pxelinux needed.
+# EDIT the server IP and the kickstart for the variant you want.
+kernel http://10.20.0.1:8000/stream9/images/pxeboot/vmlinuz inst.stage2=http://10.20.0.1:8000/stream9 inst.ks=http://10.20.0.1:8000/ks/c9s-base.ks ip=dhcp inst.text console=ttyS0,115200
+initrd http://10.20.0.1:8000/stream9/images/pxeboot/initrd.img
+boot

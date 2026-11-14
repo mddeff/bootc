@@ -1,0 +1,6 @@
+# downloaded PXE payloads and runtime state
+pxe/http/
+pxe/tftp/
+pxe/*.leases
+pxe/*.pid
+*.log

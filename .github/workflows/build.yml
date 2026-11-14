@@ -1,0 +1,100 @@
+name: build images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "images/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "images/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+  schedule:
+    # weekly rebuild to pick up upstream centos-bootc updates
+    - cron: "17 6 * * 1"
+
+env:
+  REGISTRY: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [c9s-base, c10s-base]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute build id
+        id: meta
+        run: echo "build_id=$(date -u +%Y%m%d).${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build ${{ matrix.variant }}
+        run: |
+          docker build \
+            -f images/${{ matrix.variant }}/Containerfile \
+            --build-arg IMAGE_NAME=${{ matrix.variant }} \
+            --build-arg BUILD_ID=${{ steps.meta.outputs.build_id }} \
+            -t ${{ env.REGISTRY }}/${{ matrix.variant }}:${{ steps.meta.outputs.build_id }} \
+            -t ${{ env.REGISTRY }}/${{ matrix.variant }}:latest \
+            images/${{ matrix.variant }}
+
+      # Moving tag :latest + immutable date tag. Hosts follow :latest via `bootc upgrade`;
+      # the date tag pins a known build for rollback/forensics.
+      - name: Push ${{ matrix.variant }}
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          docker push ${{ env.REGISTRY }}/${{ matrix.variant }}:${{ steps.meta.outputs.build_id }}
+          docker push ${{ env.REGISTRY }}/${{ matrix.variant }}:latest
+
+  # Boot ISOs for the no-PXE path: upstream netinstall boot.iso (installer only, no OS payload)
+  # with inst.ks= pointing at the kickstart in this repo. The ISO carries no image and no
+  # kickstart — both are fetched at install time, so ISOs only need rebuilding when upstream
+  # refreshes the installer. Published to the rolling "boot-isos" release.
+  isos:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: c9s-base,  stream: 9-stream,  iso: CentOS-Stream-9-latest-x86_64-boot.iso }
+          - { name: c10s-base, stream: 10-stream, iso: CentOS-Stream-10-latest-x86_64-boot.iso }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download upstream boot.iso
+        run: curl -fsSL --retry 5 -o boot.iso "https://mirror.stream.centos.org/${{ matrix.stream }}/BaseOS/x86_64/iso/${{ matrix.iso }}"
+
+      - name: Inject inst.ks kernel arg (mkksiso)
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work registry.fedoraproject.org/fedora:44 \
+            bash -ceu 'dnf -y -q install lorax xorriso >/dev/null 2>&1; \
+              mkksiso -c "inst.ks=https://raw.githubusercontent.com/${{ github.repository }}/main/kickstarts/${{ matrix.name }}.ks" \
+                boot.iso ${{ matrix.name }}-boot.iso'
+          sha256sum ${{ matrix.name }}-boot.iso > ${{ matrix.name }}-boot.iso.sha256
+
+      - name: Upload to rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view boot-isos --repo ${{ github.repository }} >/dev/null 2>&1 || \
+            gh release create boot-isos --repo ${{ github.repository }} \
+              --title "Boot ISOs" --notes "Netinstall ISOs that kickstart from this repo and pull images from GHCR. Rebuilt by CI; see README." || true
+          gh release upload boot-isos --repo ${{ github.repository }} --clobber \
+            ${{ matrix.name }}-boot.iso ${{ matrix.name }}-boot.iso.sha256
